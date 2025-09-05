@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chiyato</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Londrina+Solid:wght@300;400;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Londrina Solid', cursive;
+            touch-action: none; /* Disable default touch actions like pinch-zoom */
+            background-color: #FDEBD0;
+            /* Subtle background pattern inspired by African motifs */
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2378350F' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        .spring-line {
+            transition: transform 0.15s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        #spring.pressed .spring-line:nth-child(1) { transform: translateY(12px) scaleY(0.6); }
+        #spring.pressed .spring-line:nth-child(2) { transform: translateY(8px) scaleY(0.7); }
+        #spring.pressed .spring-line:nth-child(3) { transform: translateY(4px) scaleY(0.8); }
+        #spring.pressed .spring-line:nth-child(4) { transform: translateY(0px) scaleY(0.9); }
+
+        #jumper {
+            transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #jumper.jump {
+            transform: translateY(-250px);
+        }
+
+        .decorated-bead {
+            position: absolute;
+            cursor: grab;
+            transition: transform 0.2s ease-out;
+            user-select: none; /* prevent text selection while dragging */
+        }
+        .decorated-bead.dragging {
+            cursor: grabbing;
+            transform: scale(1.1);
+            z-index: 50;
+        }
+
+        /* Custom modal for alerts */
+        .modal {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .modal.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-orange-100 flex items-center justify-center h-screen overflow-hidden">
+    <!-- Game container, hidden initially -->
+    <div id="game-container" class="w-full max-w-sm mx-auto p-4 hidden">
+        <!-- Game Header: Target Number and Score -->
+        <div class="flex justify-between items-center mb-6 h-24 bg-orange-200 rounded-xl shadow-lg p-4 border-4 border-amber-900">
+            <div class="text-center">
+                <span class="text-amber-800 text-lg font-semibold tracking-wider">LEAVE</span>
+                <div id="target-number-display" class="text-6xl font-black text-amber-900 transition-transform duration-300">#</div>
+            </div>
+             <div class="text-center">
+                <span class="text-amber-800 text-lg font-semibold tracking-wider">STREAK</span>
+                <div id="win-streak-display" class="text-6xl font-black text-amber-900">0</div>
+            </div>
+            <div class="text-center">
+                 <span class="text-amber-800 text-lg font-semibold tracking-wider">INSIDE</span>
+                <div id="current-count-display" class="text-6xl font-black text-amber-900">6</div>
+            </div>
+        </div>
+
+        <!-- Bead Container -->
+        <div id="bead-container" class="relative w-64 h-64 mx-auto bg-amber-800 rounded-full border-8 border-amber-900 shadow-inner">
+            <!-- Decorated beads will be injected here by JS -->
+        </div>
+
+        <!-- Jumper and Spring -->
+        <div class="relative flex flex-col items-center mt-8">
+            <div id="jumper" class="w-16 h-16 bg-amber-900 rounded-full z-10 border-4 border-amber-700 shadow-md"></div>
+            <div id="spring" class="relative -top-3 w-20 h-10 flex flex-col justify-around items-center cursor-pointer">
+                <div class="spring-line w-full h-1.5 bg-orange-500 rounded-full"></div>
+                <div class="spring-line w-full h-1.5 bg-orange-500 rounded-full"></div>
+                <div class="spring-line w-full h-1.5 bg-orange-500 rounded-full"></div>
+                <div class="spring-line w-full h-1.5 bg-orange-500 rounded-full"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Name Input Modal -->
+    <div id="name-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div class="bg-orange-100 rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full border-8 border-amber-900">
+            <h2 class="text-4xl font-black text-amber-900 mb-4">Enter Your Name</h2>
+            <input type="text" id="player-name-input" placeholder="Player Name" class="w-full p-3 text-2xl text-center rounded-lg border-4 border-amber-800 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 mb-6 font-sans">
+            <button id="start-game-button" class="bg-orange-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-orange-600 transition-colors shadow-lg text-2xl border-2 border-orange-700">Start Playing</button>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="message-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div class="bg-orange-100 rounded-2xl shadow-2xl p-8 text-center max-w-sm w-full border-8 border-amber-900">
+            <h2 id="modal-title" class="text-5xl font-black text-amber-900 mb-4">GAME OVER</h2>
+            <p id="modal-text" class="text-amber-800 text-xl mb-4"></p>
+            <div id="leaderboard-container">
+                <h3 class="text-3xl font-bold text-amber-900 mb-2">Leaderboard</h3>
+                <div id="leaderboard-list" class="text-left text-amber-800 text-lg space-y-1 mb-6 max-h-48 overflow-y-auto">
+                    <!-- Leaderboard entries go here -->
+                </div>
+            </div>
+            <button id="play-again-button" class="bg-orange-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-orange-600 transition-colors shadow-lg text-2xl border-2 border-orange-700">Play Again</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, setDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // --- Firebase Setup ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "DEMO", authDomain: "DEMO", projectId: "DEMO" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'chiyato-default';
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let userId = null;
+        let playerName = "Player";
+
+        // --- DOM Elements ---
+        const gameContainer = document.getElementById('game-container');
+        const spring = document.getElementById('spring');
+        const jumper = document.getElementById('jumper');
+        const beadContainer = document.getElementById('bead-container');
+        const targetNumberDisplay = document.getElementById('target-number-display');
+        const currentCountDisplay = document.getElementById('current-count-display');
+        const winStreakDisplay = document.getElementById('win-streak-display');
+        
+        // Modals
+        const nameModal = document.getElementById('name-modal');
+        const playerNameInput = document.getElementById('player-name-input');
+        const startGameButton = document.getElementById('start-game-button');
+        const messageModal = document.getElementById('message-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalText = document.getElementById('modal-text');
+        const leaderboardList = document.getElementById('leaderboard-list');
+        const playAgainButton = document.getElementById('play-again-button');
+
+        // --- Game State ---
+        let gameState = 'idle'; // idle, springing, jumping, scoring
+        let targetNumber = 0;
+        let beads = [];
+        const TOTAL_BEADS = 6;
+        let winCount = 0;
+
+        // --- Dragging State ---
+        let selectedBead = null;
+        let offsetX, offsetY;
+
+        // --- Game Logic ---
+        function setupNewRound() {
+            gameState = 'idle';
+            targetNumberDisplay.textContent = '#';
+            targetNumberDisplay.classList.remove('scale-125');
+            currentCountDisplay.textContent = TOTAL_BEADS;
+            jumper.classList.remove('jump');
+            
+            beadContainer.innerHTML = '';
+            beads = [];
+            
+            for (let i = 0; i < TOTAL_BEADS; i++) {
+                const bead = document.createElement('div');
+                bead.classList.add('decorated-bead', 'w-10', 'h-10', 'bg-teal-500', 'rounded-full', 'border-2', 'border-teal-700', 'shadow-sm');
+                
+                const angle = (i / TOTAL_BEADS) * 2 * Math.PI;
+                const radius = beadContainer.offsetWidth / 3.5;
+                const x = beadContainer.offsetWidth / 2 + radius * Math.cos(angle) - bead.offsetWidth / 2;
+                const y = beadContainer.offsetHeight / 2 + radius * Math.sin(angle) - bead.offsetHeight / 2;
+                
+                bead.style.left = `${x}px`;
+                bead.style.top = `${y}px`;
+                bead.dataset.isInside = 'true';
+                
+                beadContainer.appendChild(bead);
+                beads.push(bead);
+            }
+        }
+
+        function initGame() {
+            winCount = 0;
+            winStreakDisplay.textContent = winCount;
+            setupNewRound();
+        }
+        
+        async function handleSpringPress() {
+            if (gameState !== 'idle') return;
+            gameState = 'springing';
+            
+            targetNumber = Math.floor(Math.random() * TOTAL_BEADS) + 1;
+            targetNumberDisplay.textContent = targetNumber;
+            targetNumberDisplay.classList.add('scale-125');
+
+            spring.classList.add('pressed');
+            
+            setTimeout(() => {
+                spring.classList.remove('pressed');
+                jumper.classList.add('jump');
+                gameState = 'jumping';
+            }, 200);
+        }
+
+        async function handleJumpEnd() {
+            if (gameState !== 'jumping') return;
+            gameState = 'scoring';
+            
+            const beadsInside = beads.filter(b => b.dataset.isInside === 'true').length;
+            
+            if (beadsInside === targetNumber) {
+                winCount++;
+                winStreakDisplay.textContent = winCount;
+                winStreakDisplay.classList.add('scale-150', 'text-green-500');
+                setTimeout(() => {
+                    winStreakDisplay.classList.remove('scale-150', 'text-green-500');
+                    setupNewRound();
+                }, 800);
+            } else {
+                await saveScore(playerName, winCount);
+                await showLeaderboardModal();
+            }
+        }
+        
+        // --- Leaderboard Logic ---
+        async function saveScore(name, score) {
+            if (!userId) {
+                console.error("User not signed in, cannot save score.");
+                return;
+            }
+            try {
+                // We use the authenticated userId as the document ID to ensure one score per player.
+                const leaderboardCol = collection(db, `/artifacts/${appId}/public/data/leaderboard`);
+                const playerDocRef = doc(leaderboardCol, userId);
+
+                const docSnap = await getDocs(query(leaderboardCol, where("userId", "==", userId)));
+
+                let currentHighScore = 0;
+                if (!docSnap.empty) {
+                     currentHighScore = docSnap.docs[0].data().score || 0;
+                }
+
+                if (score > currentHighScore) {
+                    await setDoc(playerDocRef, {
+                        name: name,
+                        score: score,
+                        userId: userId
+                    });
+                }
+            } catch (error) {
+                console.error("Error saving score: ", error);
+            }
+        }
+
+        async function showLeaderboardModal() {
+            modalText.textContent = `Your Final Streak: ${winCount}`;
+            leaderboardList.innerHTML = '<li>Loading...</li>';
+            messageModal.classList.remove('hidden');
+
+            try {
+                const leaderboardCol = collection(db, `/artifacts/${appId}/public/data/leaderboard`);
+                const snapshot = await getDocs(leaderboardCol);
+                const scores = snapshot.docs.map(doc => doc.data());
+
+                // Sort scores in memory
+                scores.sort((a, b) => b.score - a.score);
+
+                leaderboardList.innerHTML = '';
+                if(scores.length === 0) {
+                     leaderboardList.innerHTML = '<li>No scores yet!</li>';
+                } else {
+                    scores.slice(0, 10).forEach((entry, index) => {
+                        const li = document.createElement('li');
+                        li.className = "flex justify-between p-1 rounded " + (entry.userId === userId ? "bg-orange-300" : "");
+                        li.innerHTML = `<span>${index + 1}. ${entry.name}</span><strong>${entry.score}</strong>`;
+                        leaderboardList.appendChild(li);
+                    });
+                }
+            } catch(error) {
+                console.error("Error fetching leaderboard: ", error);
+                leaderboardList.innerHTML = '<li>Could not load scores.</li>';
+            }
+        }
+
+        // --- Drag and Drop Logic ---
+        function startDrag(e) {
+            if (gameState !== 'jumping' || e.target.classList.contains('decorated-bead') === false) return;
+            selectedBead = e.target;
+            selectedBead.classList.add('dragging');
+            const event = e.touches ? e.touches[0] : e;
+            const rect = selectedBead.getBoundingClientRect();
+            offsetX = event.clientX - rect.left;
+            offsetY = event.clientY - rect.top;
+        }
+
+        function drag(e) {
+            if (!selectedBead) return;
+            e.preventDefault();
+            const event = e.touches ? e.touches[0] : e;
+            const containerRect = beadContainer.parentElement.getBoundingClientRect();
+            let x = event.clientX - containerRect.left - offsetX;
+            let y = event.clientY - containerRect.top - offsetY;
+            selectedBead.style.left = `${x}px`;
+            selectedBead.style.top = `${y}px`;
+        }
+
+        function endDrag() {
+            if (!selectedBead) return;
+            selectedBead.classList.remove('dragging');
+            const beadRect = selectedBead.getBoundingClientRect();
+            const containerRect = beadContainer.getBoundingClientRect();
+            const isInside = (beadRect.left >= containerRect.left && beadRect.right <= containerRect.right && beadRect.top >= containerRect.top && beadRect.bottom <= containerRect.bottom);
+            selectedBead.dataset.isInside = isInside;
+            updateCurrentCount();
+            selectedBead = null;
+        }
+        
+        function updateCurrentCount() {
+            const count = beads.filter(b => b.dataset.isInside === 'true').length;
+            currentCountDisplay.textContent = count;
+        }
+
+        // --- Event Listeners ---
+        spring.addEventListener('mousedown', handleSpringPress);
+        spring.addEventListener('touchstart', (e) => { e.preventDefault(); handleSpringPress(); });
+
+        jumper.addEventListener('transitionend', (e) => {
+            if (e.propertyName === 'transform' && !jumper.classList.contains('jump')) handleJumpEnd();
+        });
+
+        jumper.addEventListener('transitionrun', (e) => {
+            if (e.propertyName === 'transform' && jumper.classList.contains('jump')) setTimeout(() => jumper.classList.remove('jump'), 800);
+        });
+        
+        playAgainButton.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+            initGame();
+        });
+        
+        startGameButton.addEventListener('click', () => {
+            const name = playerNameInput.value.trim();
+            if(name) {
+                playerName = name;
+                nameModal.classList.add('hidden');
+                gameContainer.classList.remove('hidden');
+                initGame();
+            } else {
+                playerNameInput.classList.add('border-red-500');
+            }
+        });
+
+        document.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchstart', startDrag, { passive: false });
+        document.addEventListener('touchmove', drag, { passive: false });
+        document.addEventListener('touchend', endDrag);
+        
+        // --- Window Load ---
+        window.onload = () => {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    // User is signed in. Show name modal.
+                    nameModal.classList.remove('hidden');
+                } else {
+                    // User is signed out. Sign in anonymously.
+                    try {
+                        const userCredential = await signInAnonymously(auth);
+                        userId = userCredential.user.uid;
+                        // Now show name modal.
+                        nameModal.classList.remove('hidden');
+                    } catch (e) {
+                        console.error("Anonymous sign in failed", e);
+                        // Handle error, maybe show a message to the user
+                    }
+                }
+            });
+        };
+        
+        window.onresize = () => {
+            if (gameState === 'idle' && !nameModal.classList.contains('hidden')) {
+                // Only reset if game hasn't started
+                setupNewRound();
+            }
+        };
+
+    </script>
+</body>
+</html>
