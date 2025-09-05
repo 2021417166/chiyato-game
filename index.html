@@ -121,9 +121,17 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         // --- Firebase Setup ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "DEMO", authDomain: "DEMO", projectId: "DEMO" };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'chiyato-default';
-        
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBiH-hXQireHA2mFwL06bPGrVNnfKpG5LI",
+  authDomain: "chiyato-game.firebaseapp.com",
+  projectId: "chiyato-game",
+  storageBucket: "chiyato-game.firebasestorage.app",
+  messagingSenderId: "515767643558",
+  appId: "1:515767643558:web:e6765b6dc28f62698bf367"
+};
+       
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
